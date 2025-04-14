@@ -15,10 +15,16 @@ module Program =
         let builder = WebApplication.CreateBuilder(args)
 
         builder.Services.AddControllers()
+        builder.Services.AddCors(fun opt ->
+            opt.AddDefaultPolicy(
+                fun policy -> 
+                    policy.AllowAnyOrigin() |> ignore
+            )
+        )
 
         let app = builder.Build()
 
-
+        app.UseCors()
         app.UseAuthorization()
         app.MapControllers()
 

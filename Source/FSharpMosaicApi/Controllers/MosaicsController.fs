@@ -4,18 +4,18 @@ open Microsoft.AspNetCore.Mvc
 open Microsoft.Extensions.Logging
 open Microsoft.AspNetCore.Http
 open SkiaSharp
+open System
 open System.Threading.Tasks
+open System.IO
 open System.IO.Compression
 open System.Threading
 open System.Text.Json
 open FSharpMosaicApi.Database
-open System.IO
 
 [<CLIMutable>]
 type CreateMosaicModel = {
-    Image: IFormFile
-    ImagesX: int
-    ImagesY: int
+    SourceImage: IFormFile
+    PieceSize: int
 }
 
 [<CLIMutable>]
@@ -53,46 +53,53 @@ type MosaicsController(
 
     [<HttpPost>]
     member this.CreateMosaic([<FromForm>] body: CreateMosaicModel) =
-        use sourceImgStream = body.Image.OpenReadStream()
+        use sourceImgStream = body.SourceImage.OpenReadStream()
         use bitmap = SKBitmap.Decode(sourceImgStream)
 
         // TODO: validation for img size and chunks
 
-        let batchWidth = bitmap.Width / body.ImagesX
-        let batchHeight = bitmap.Height / body.ImagesY
+        let imagesX = float bitmap.Width / float body.PieceSize |> floor |> int
+        let imagesY = float bitmap.Height / float body.PieceSize |> floor |> int
+        let resultImageSize = SKPointI(
+            imagesX * body.PieceSize,
+            imagesY * body.PieceSize)
+        let sourceImageSize = SKPointI(bitmap.Width, bitmap.Height)
+        let padding = SKPointI(
+            (sourceImageSize.X - resultImageSize.X) / 2,
+            (sourceImageSize.Y - resultImageSize.Y) / 2)
 
         let chunkPositions =
-            [| 0..batchWidth * batchHeight - 1 |]
-            |> Array.map (fun i -> SKPointI(i % batchWidth, i / batchWidth))
+            [| 0..body.PieceSize * body.PieceSize - 1 |]
+            |> Array.map (fun i -> SKPointI(i % imagesX, i / imagesX))
+        let batchesCount = imagesX * imagesY
 
-        let batches = body.ImagesX * body.ImagesY
-        let chunksAvgColors : SKColor array = Array.zeroCreate batches
-        let _ = Parallel.For(0, batches, fun i ->
+        let chunksAvgColors : SKColor array = Array.zeroCreate batchesCount
+        let _ = Parallel.For(0, batchesCount, fun i ->
             let batchTopLeftPosition = SKPointI(
-                (i % body.ImagesX) * batchWidth,
-                (i / body.ImagesX) * batchHeight)
+                (i % imagesX) * body.PieceSize,
+                (i / imagesX) * body.PieceSize) + padding
             let pixelPositions =
                 chunkPositions |> Array.map(fun p -> batchTopLeftPosition + p)
 
             chunksAvgColors[i] <- ImagesHelper.getAvgColor(bitmap, pixelPositions)
         )
 
-        let squareSize = 32
+        let squareSize = body.PieceSize
         let resultBitmap = new SKBitmap(
-            squareSize * body.ImagesX,
-            squareSize * bitmap.Height,
+            resultImageSize.X,
+            resultImageSize.Y,
             SKColorType.Rgba8888,
             SKAlphaType.Premul)
         use canvas = new SKCanvas(resultBitmap)
-        for x = 0 to body.ImagesX - 1 do
-            for y = 0 to body.ImagesY - 1 do
+        for x = 0 to imagesX - 1 do
+            for y = 0 to imagesY - 1 do
                 let rectBounds = SKRect(
                     float32 (x * squareSize),
                     float32 (y * squareSize),
                     float32 (x * squareSize + squareSize),
                     float32 (y * squareSize + squareSize))
 
-                let i = y * body.ImagesX + x
+                let i = y * imagesX + x
                 let color = chunksAvgColors[i]
                 use paint = new SKPaint(Color = color)
                 canvas.DrawRect(rectBounds, paint)
@@ -145,10 +152,14 @@ type MosaicsController(
                 let entry = zip.Entries[i]
                 use entryStream = entry.Open()
                 use bitmap = SKBitmap.Decode(entryStream)
+                let bitmapCroppedSize = Math.Min(bitmap.Width, bitmap.Height)
+                let padding = SKPointI(
+                    (bitmap.Width - bitmapCroppedSize) / 2,
+                    (bitmap.Height - bitmapCroppedSize) / 2)
                 
                 let allPixelsPositions =
-                    [| 0..bitmap.Width * bitmap.Height - 1 |]
-                    |> Array.map (fun i -> SKPointI(i % bitmap.Width, i / bitmap.Width))
+                    [| 0..bitmapCroppedSize * bitmapCroppedSize - 1 |]
+                    |> Array.map (fun i -> SKPointI(i % bitmap.Width, i / bitmap.Width) + padding)
 
                 let imageAvgColor =
                     ImagesHelper.getAvgColor(bitmap, allPixelsPositions)
