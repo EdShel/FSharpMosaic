@@ -10,7 +10,7 @@ open System.IO
 open System.IO.Compression
 open System.Threading
 open System.Text.Json
-open FSharpMosaicApi.Database
+open FSharpMosaicApi.DataAccess
 
 [<CLIMutable>]
 type CreateMosaicModel = {
@@ -39,11 +39,10 @@ module ImagesHelper =
             )
         SKColor(byte avgR, byte avgG, byte avgB, 255uy)
 
-    let packColorRGBA8888 (color: SKColor) =
-        (int32 color.Red <<< 24)
-        ||| (int32 color.Green <<< 16)
-        ||| (int32 color.Blue <<< 8)
-        ||| (int32 color.Alpha)
+    let packColor0BGR8888 (color: SKColor) =
+        (int32 color.Blue <<< 16)
+        ||| (int32 color.Green <<< 8)
+        ||| (int32 color.Red)
 
 [<ApiController>]
 [<Route("/api/v1/mosaics")>]
@@ -83,6 +82,12 @@ type MosaicsController(
 
             chunksAvgColors[i] <- ImagesHelper.getAvgColor(bitmap, pixelPositions)
         )
+        let hashesToFindInDB =
+            chunksAvgColors
+            |> Array.map ImagesHelper.packColor0BGR8888
+            |> Array.toList
+        let fileNames = ImageHashRepository.findClosestHashes(hashesToFindInDB)
+
 
         let squareSize = body.PieceSize
         let resultBitmap = new SKBitmap(
@@ -100,6 +105,10 @@ type MosaicsController(
                     float32 (y * squareSize + squareSize))
 
                 let i = y * imagesX + x
+                let imageName = fileNames[i]
+                use imageStream = ImageFileRepository.openFile(imageName)
+                use imageBitmap = SKBitmap.Decode(imageStream)
+                canvas.DrawBitmap(imageBitmap, rectBounds)
                 let color = chunksAvgColors[i]
                 use paint = new SKPaint(Color = color)
                 canvas.DrawRect(rectBounds, paint)
@@ -163,7 +172,23 @@ type MosaicsController(
 
                 let imageAvgColor =
                     ImagesHelper.getAvgColor(bitmap, allPixelsPositions)
-                    |> ImagesHelper.packColorRGBA8888
+                    |> ImagesHelper.packColor0BGR8888
+
+                
+                use croppedBitmap = new SKBitmap(
+                    bitmapCroppedSize,
+                    bitmapCroppedSize,
+                    SKColorType.Rgba8888,
+                    SKAlphaType.Premul)
+                let isCropOK = bitmap.ExtractSubset(
+                    croppedBitmap,
+                    SKRectI(padding.X, padding.Y, bitmap.Width - padding.X, bitmap.Height - padding.Y))
+                if not isCropOK then
+                    raise(invalidOp("Unable to crop a bitmap"))
+
+                use croppedStream = croppedBitmap.Encode(SKEncodedImageFormat.Png, 70).AsStream()
+                let pngFileName = Path.ChangeExtension(entry.FullName, ".png")
+                ImageFileRepository.saveFile(pngFileName, croppedStream)
 
                 ImageHashRepository.insert(imageAvgColor, entry.FullName)
 
@@ -172,38 +197,3 @@ type MosaicsController(
         match validate body.ZipFilePath with
         | Ok filePath -> importFile(filePath)
         | Error errors -> writeErrors(errors)
-
-
-//[<ApiController>]
-//[<Route("[controller]")>]
-//type WeatherForecast2Controller (logger : ILogger<WeatherForecast2Controller>) =
-//    inherit ControllerBase()
-
-//    let summaries =
-//        [|
-//            "Freezing"
-//            "Bracing"
-//            "Chilly"
-//            "Cool"
-//            "Mild"
-//            "Warm"
-//            "Balmy"
-//            "Hot"
-//            "Sweltering"
-//            "Scorching"
-//        |]
-
-//    [<HttpPost>]
-//    member _.CreateMosaic([<FromForm>] body: CreateMosaicModel) =
-//        printfn "Passed %A" (body)
-//        Ok()
-//    [<HttpGet>]
-//    member _.Get() =
-//        printfn "GETTTTT"
-//        Ok("Hello")
-
-
-    //[<HttpGet>]
-    //member _.Get() =
-    //    let rng = System.Random()
-    //    rng.Next()

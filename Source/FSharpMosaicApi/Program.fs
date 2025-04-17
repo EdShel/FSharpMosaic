@@ -3,7 +3,7 @@ namespace FSharpMosaicApi
 open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
-open FSharpMosaicApi.Database
+open FSharpMosaicApi.DataAccess
 
 module Program =
     let exitCode = 0

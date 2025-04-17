@@ -5,7 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Database\ImageHashRepository.fs" />
+    <Compile Include="DataAccess\ImageFileRepository.fs" />
+    <Compile Include="DataAccess\ImageHashRepository.fs" />
     <Compile Include="Controllers\MosaicsController.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
