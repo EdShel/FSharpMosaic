@@ -3,13 +3,13 @@
 open Microsoft.Data.Sqlite
 
 module ImageHashRepository =
-    let private openConnection() =
+    let private OpenConnection() =
         let connection = new SqliteConnection("Data Source=images.db")
         connection.Open()
         connection
 
-    let createTableIfNotExists() =
-        use connection = openConnection()
+    let CreateTableIfNotExists() =
+        use connection = OpenConnection()
 
         let command = connection.CreateCommand()
         command.CommandText <- "
@@ -21,8 +21,8 @@ module ImageHashRepository =
         "
         command.ExecuteNonQuery()
 
-    let insert(hash: int, fileName: string) =
-        use connection = openConnection()
+    let Insert(hash: int, fileName: string) =
+        use connection = OpenConnection()
 
         let command = connection.CreateCommand()
         command.CommandText <- "
@@ -36,8 +36,8 @@ module ImageHashRepository =
         if createdRows <> 1 then
             raise(invalidOp("Didn't create the record"))
 
-    let findClosestHashes(hashes: int list) =
-        use connection = openConnection()
+    let FindClosestHashes(hashes: int list) =
+        use connection = OpenConnection()
 
         let command = connection.CreateCommand()
         let valuesClause =
@@ -47,7 +47,7 @@ module ImageHashRepository =
 
         command.CommandText <- $"
             WITH inputHash(Hash) AS (
-                VALUES ${valuesClause}
+                VALUES {valuesClause}
             ),
             inputRGB AS (
                 SELECT 
@@ -93,36 +93,3 @@ module ImageHashRepository =
             |> List.map(fun x -> foundImages |> List.find(fun (foundHash, _) -> x = foundHash) )
             |> List.map(fun (_, fileName) -> fileName)
         fileNamesInOriginalOrder
-
-
-
-
-//             WITH h(Hash) AS (
-//     VALUES (1), (2), (3)
-// ),
-// inputRGB AS (
-//     SELECT 
-//         (h.Hash >> 16) & 0xFF AS B,
-//         (h.Hash >> 8) & 0xFF AS G,
-//         (h.Hash & 0xFF) AS R
-//     FROM h
-// ),
-// rgbFilename AS (
-//     SELECT 
-//         FileName,
-//         (Hash >> 16) & 0xFF AS B,
-//         (Hash >> 8) & 0xFF AS G,
-//         (Hash & 0xFF) AS R
-//     FROM ImageHash
-// )
-// SELECT
-//     (
-//         SELECT FileName 
-//         FROM rgbFilename s
-//         ORDER BY 
-//             (s.R - i.R) * (s.R - i.R) + 
-//             (s.G - i.G) * (s.G - i.G) + 
-//             (s.B - i.B) * (s.B - i.B)
-//         LIMIT 1
-//     )
-// FROM inputRGB i;
