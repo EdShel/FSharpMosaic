@@ -79,7 +79,7 @@ export default function Home() {
           }}
         />
 
-        <input type="number" defaultValue={32} name="PieceSize" />
+        <input type="number" defaultValue={32} name="Density" />
 
         <button type="submit">Create mosaic</button>
       </form>

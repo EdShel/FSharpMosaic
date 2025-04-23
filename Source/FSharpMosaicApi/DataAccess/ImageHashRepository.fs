@@ -15,8 +15,7 @@ module ImageHashRepository =
         command.CommandText <- "
             CREATE TABLE IF NOT EXISTS ImageHash (
                 Id INTEGER PRIMARY KEY,
-                Hash INTEGER NOT NULL,
-                FileName TEXT NOT NULL
+                Hash INTEGER NOT NULL
             )
         "
         command.ExecuteNonQuery()
@@ -36,60 +35,44 @@ module ImageHashRepository =
         if createdRows <> 1 then
             raise(invalidOp("Didn't create the record"))
 
-    let FindClosestHashes(hashes: int list) =
+    let GetAllHashes() =
         use connection = OpenConnection()
 
         let command = connection.CreateCommand()
-        let valuesClause =
-            hashes
-            |> List.map(fun h -> $"({h})")
-            |> String.concat ", "
-
-        command.CommandText <- $"
-            WITH inputHash(Hash) AS (
-                VALUES {valuesClause}
-            ),
-            inputRGB AS (
-                SELECT 
-                    Hash AS InputHash,
-                    (Hash >> 16) & 0xFF AS B,
-                    (Hash >> 8) & 0xFF AS G,
-                    (Hash & 0xFF) AS R
-                FROM inputHash
-            ),
-            rgbFilename AS (
-                SELECT 
-                    FileName,
-                    (Hash >> 16) & 0xFF AS B,
-                    (Hash >> 8) & 0xFF AS G,
-                    (Hash & 0xFF) AS R
-                FROM ImageHash
-            ),
-            rankedByColorDistance AS (
-                SELECT 
-                    i.InputHash,
-                    r.FileName,
-                    ROW_NUMBER() OVER (PARTITION BY i.InputHash ORDER BY 
-                        ((r.R - i.R)*(r.R - i.R) + (r.G - i.G)*(r.G - i.G) + (r.B - i.B)*(r.B - i.B))
-                    ) AS row_no
-                FROM inputRGB i
-                JOIN rgbFilename r
-            )
-            SELECT InputHash, FileName
-            FROM rankedByColorDistance
-            WHERE row_no = 1;
-            "
+        
+        command.CommandText <- "SELECT Id, Hash FROM ImageHash"
         let reader = command.ExecuteReader()
-        let inputHashIndex = reader.GetOrdinal("InputHash")
-        let fileNameIndex = reader.GetOrdinal("FileName")
-        let foundImages = [
+        let idOrdinal = reader.GetOrdinal("Id")
+        let hashOrdinal = reader.GetOrdinal("Hash")
+        let result = [
             while reader.Read() do
-                let hash = reader.GetInt32(inputHashIndex)
-                let fileName = reader.GetString(fileNameIndex)
-                yield (hash, fileName)
+                let id = reader.GetInt32(idOrdinal)
+                let hash = reader.GetInt32(hashOrdinal)
+                yield (id, hash)
         ]
-        let fileNamesInOriginalOrder =
-            hashes
-            |> List.map(fun x -> foundImages |> List.find(fun (foundHash, _) -> x = foundHash) )
-            |> List.map(fun (_, fileName) -> fileName)
-        fileNamesInOriginalOrder
+        result
+
+    let GetFileNames(ids: int array) =
+        use connection = OpenConnection()
+
+        let command = connection.CreateCommand()
+        
+        let inClause =
+            ids
+            |> Array.distinct
+            |> Array.map(fun x -> x.ToString())
+            |> String.concat(",")
+        command.CommandText <- $"SELECT Id, FileName FROM ImageHash WHERE Id IN ({inClause})"
+        command.Parameters.AddWithValue("$ids", ids) |> ignore
+
+        let reader = command.ExecuteReader()
+        let idOrdinal = reader.GetOrdinal("Id")
+        let fileNameOrdinal = reader.GetOrdinal("FileName")
+        let result = [
+            while reader.Read() do
+                let id = reader.GetInt32(idOrdinal)
+                let fileName = reader.GetString(fileNameOrdinal)
+                yield (id, fileName)
+        ]
+        result
+

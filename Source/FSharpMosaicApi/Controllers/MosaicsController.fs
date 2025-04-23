@@ -1,7 +1,6 @@
 ﻿namespace FSharpMosaicApi.Controllers
 
 open Microsoft.AspNetCore.Mvc
-open Microsoft.Extensions.Logging
 open Microsoft.AspNetCore.Http
 open SkiaSharp
 open System
@@ -11,11 +10,12 @@ open System.IO.Compression
 open System.Threading
 open System.Text.Json
 open FSharpMosaicApi.DataAccess
+open System.ComponentModel.DataAnnotations
 
 [<CLIMutable>]
 type CreateMosaicModel = {
-    SourceImage: IFormFile
-    PieceSize: int
+    [<Required>] SourceImage: IFormFile
+    [<Required>] Density: Nullable<int>
 }
 
 [<CLIMutable>]
@@ -23,8 +23,22 @@ type ImportImagesModel = {
     ZipFilePath: string
 }
 
+type UnpackedColor =
+    struct
+        val Red: int32
+        val Green: int32
+        val Blue: int32
+
+        new(r: int32, g: int32, b: int32) = {
+            Red = r
+            Green = g
+            Blue = b
+        }
+    end
+    
+
 module ImagesHelper =
-    let GetAvgColor (bitmap: SKBitmap, pixelPositions: SKPointI array): SKColor =
+    let GetAvgColor(bitmap: SKBitmap, pixelPositions: SKPointI array) =
         let colors = pixelPositions |> Array.map(fun p -> bitmap.GetPixel(p.X, p.Y))
         let (_, avgR, avgG, avgB) =
             ((0.0, 0.0, 0.0, 0.0), colors)
@@ -37,12 +51,18 @@ module ImagesHelper =
                 let b' = b + ((float color.Blue - b) / count')
                 (count', r', g', b')
             )
-        SKColor(byte avgR, byte avgG, byte avgB, 255uy)
+        UnpackedColor(int32 avgR, int32 avgG, int32 avgB)
 
-    let packColor0BGR8888 (color: SKColor) =
+    let PackColor0BGR8888(color: UnpackedColor) =
         (int32 color.Blue <<< 16)
         ||| (int32 color.Green <<< 8)
         ||| (int32 color.Red)
+
+    let UnpackColor0BGR8888(packedColor: int32) =
+        let r = packedColor &&& 0xFF
+        let g = (packedColor >>> 8) &&& 0xFF
+        let b = (packedColor >>> 16) &&& 0xFF
+        UnpackedColor(r, g, b)
 
 [<ApiController>]
 [<Route("/api/v1/mosaics")>]
@@ -50,70 +70,111 @@ type MosaicsController() =
     inherit ControllerBase()
 
     [<HttpPost>]
-    member this.CreateMosaic([<FromForm>] body: CreateMosaicModel) =
+    member this.CreateMosaic([<FromForm>] body: CreateMosaicModel): IActionResult =
         use sourceImgStream = body.SourceImage.OpenReadStream()
         use bitmap = SKBitmap.Decode(sourceImgStream)
 
-        // TODO: validation for img size and chunks
+        let largestDimension = Math.Max(bitmap.Width, bitmap.Height)
 
-        let imagesX = float bitmap.Width / float body.PieceSize |> floor |> int
-        let imagesY = float bitmap.Height / float body.PieceSize |> floor |> int
-        let resultImageSize = SKPointI(
-            imagesX * body.PieceSize,
-            imagesY * body.PieceSize)
-        let sourceImageSize = SKPointI(bitmap.Width, bitmap.Height)
-        let padding = SKPointI(
-            (sourceImageSize.X - resultImageSize.X) / 2,
-            (sourceImageSize.Y - resultImageSize.Y) / 2)
+        let validatationResult =
+            if bitmap.Width > 4096 || bitmap.Height > 4096 then
+               this.ModelState.AddModelError(nameof(body.SourceImage), "Image is too large")
+            if body.Density.Value > largestDimension then
+                this.ModelState.AddModelError(nameof(body.Density), "Density is too big for this image")
 
-        let chunkPositions =
-            [| 0..body.PieceSize * body.PieceSize - 1 |]
-            |> Array.map (fun i -> SKPointI(i % imagesX, i / imagesX))
-        let batchesCount = imagesX * imagesY
+            if this.ModelState.ErrorCount > 0 then
+                Error this.ModelState
+            else
+                Ok true
 
-        let chunksAvgColors : SKColor array = Array.zeroCreate batchesCount
-        let _ = Parallel.For(0, batchesCount, fun i ->
-            let batchTopLeftPosition = SKPointI(
-                (i % imagesX) * body.PieceSize,
-                (i / imagesX) * body.PieceSize) + padding
-            let pixelPositions =
-                chunkPositions |> Array.map(fun p -> batchTopLeftPosition + p)
+        let generateMosaic() =
+            let chunkSize = largestDimension / body.Density.Value
+            let imagesX = bitmap.Width / chunkSize
+            let imagesY = bitmap.Height / chunkSize
+            let sourceImageSize = SKPointI(bitmap.Width, bitmap.Height)
+            let paddedSourceImageSize = SKPointI(imagesX * chunkSize, imagesY * chunkSize)
+            let padding = SKPointI(
+                (sourceImageSize.X - paddedSourceImageSize.X) / 2,
+                (sourceImageSize.Y - paddedSourceImageSize.Y) / 2)
 
-            chunksAvgColors[i] <- ImagesHelper.GetAvgColor(bitmap, pixelPositions)
-        )
-        let hashesToFindInDB =
-            chunksAvgColors
-            |> Array.map ImagesHelper.packColor0BGR8888
-            |> Array.toList
-        let fileNames = ImageHashRepository.FindClosestHashes(hashesToFindInDB)
+            let chunkPositions =
+                [| 0..chunkSize * chunkSize - 1 |]
+                |> Array.map (fun i -> SKPointI(i % chunkSize, i / chunkSize))
+            let batchesCount = imagesX * imagesY
 
+            let chunksAvgColors : UnpackedColor array = Array.zeroCreate batchesCount
+            let _ = Parallel.For(0, chunksAvgColors.Length, fun i ->
+                let chunkTopLeftPosition = SKPointI(
+                    (i % imagesX) * chunkSize,
+                    (i / imagesX) * chunkSize) + padding
+                let pixelPositions =
+                    chunkPositions |> Array.map(fun p -> chunkTopLeftPosition + p)
 
-        let squareSize = body.PieceSize
-        let resultBitmap = new SKBitmap(
-            resultImageSize.X,
-            resultImageSize.Y,
-            SKColorType.Rgba8888,
-            SKAlphaType.Premul)
-        use canvas = new SKCanvas(resultBitmap)
-        for x = 0 to imagesX - 1 do
-            for y = 0 to imagesY - 1 do
-                let rectBounds = SKRect(
-                    float32 (x * squareSize),
-                    float32 (y * squareSize),
-                    float32 (x * squareSize + squareSize),
-                    float32 (y * squareSize + squareSize))
+                chunksAvgColors[i] <- ImagesHelper.GetAvgColor(bitmap, pixelPositions)
+            )
 
-                let i = y * imagesX + x
-                let imageName = fileNames[i]
-                use imageStream = ImageFileRepository.OpenFile(imageName)
-                use imageBitmap = SKBitmap.Decode(imageStream)
-                canvas.DrawBitmap(imageBitmap, rectBounds)
+            let precomputedHashes =
+                ImageHashRepository.GetAllHashes()
+                |> List.map(fun (id, hash) -> (id, ImagesHelper.UnpackColor0BGR8888(hash)))
 
-        canvas.Flush()
+            let chunkImagesIds : int array = Array.zeroCreate chunksAvgColors.Length
+            let _ = Parallel.For(0, chunkImagesIds.Length, fun i ->
+                let euclideanDistanceRgb (a: UnpackedColor) (b: UnpackedColor) =
+                    let rDif = a.Red - b.Red
+                    let gDif = a.Green - b.Green
+                    let bDif = a.Blue - b.Blue
+                    (rDif * rDif) + (gDif * gDif) + (bDif * bDif)
 
-        let resultSKData = resultBitmap.Encode(SKEncodedImageFormat.Png, 70)
-        let resultStream = resultSKData.AsStream()
-        this.File(resultStream, "image/png")
+                let chunkColor = chunksAvgColors[i]
+                let distanceToChunkAvgColor = euclideanDistanceRgb chunkColor
+
+                let (closestImageId, _) =
+                    precomputedHashes
+                    |> List.minBy(fun (_, color) -> distanceToChunkAvgColor(color))
+                chunkImagesIds[i] <- closestImageId
+            )
+
+            let piecesFileNames = ImageHashRepository.GetFileNames(chunkImagesIds)
+
+            let targetImageResolution = 8192.0
+            let resultImageScale =
+                Math.Min(
+                    targetImageResolution / float paddedSourceImageSize.X,
+                    targetImageResolution / float paddedSourceImageSize.Y)
+                |> fun v -> Math.Max(1.0, v)
+                |> Math.Floor
+                |> int
+            let mosaicPieceSize = resultImageScale * chunkSize
+            let resultBitmap = new SKBitmap(
+                paddedSourceImageSize.X * resultImageScale,
+                paddedSourceImageSize.Y * resultImageScale,
+                SKColorType.Rgba8888,
+                SKAlphaType.Premul)
+            use canvas = new SKCanvas(resultBitmap)
+            for x = 0 to imagesX - 1 do
+                for y = 0 to imagesY - 1 do
+                    let rectBounds = SKRect(
+                        float32 (x * mosaicPieceSize),
+                        float32 (y * mosaicPieceSize),
+                        float32 (x * mosaicPieceSize + mosaicPieceSize),
+                        float32 (y * mosaicPieceSize + mosaicPieceSize))
+
+                    let chunkId = y * imagesX + x
+                    let chunkImageId = chunkImagesIds[chunkId]
+                    let (_, imageName) = piecesFileNames |> List.find(fun (id, _) -> id = chunkImageId)
+                    use imageStream = ImageFileRepository.OpenFile(imageName)
+                    use imageBitmap = SKBitmap.Decode(imageStream)
+                    canvas.DrawBitmap(imageBitmap, rectBounds)
+
+            canvas.Flush()
+
+            let resultSKData = resultBitmap.Encode(SKEncodedImageFormat.Png, 70)
+            let resultStream = resultSKData.AsStream()
+            this.File(resultStream, "image/png")
+
+        match validatationResult with
+        | Ok _ -> generateMosaic()
+        | Error errors -> this.BadRequest(errors)
 
     [<HttpPost("import")>]
     member this.ImportImages(
@@ -162,7 +223,7 @@ type MosaicsController() =
 
             let imageAvgColor =
                 ImagesHelper.GetAvgColor(bitmap, allPixelsPositions)
-                |> ImagesHelper.packColor0BGR8888
+                |> ImagesHelper.PackColor0BGR8888
 
             use croppedBitmap = new SKBitmap(
                 bitmapCroppedSize,
