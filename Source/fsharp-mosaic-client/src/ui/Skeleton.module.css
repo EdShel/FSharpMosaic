@@ -1,0 +1,32 @@
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--accent-color);
+  border-radius: 4px;
+}
+.skeleton::after {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0),
+    rgba(255, 255, 255, 0.4),
+    rgba(255, 255, 255, 0)
+  );
+  content: "";
+  animation: skeletonAnimation 1.2s infinite;
+  position: absolute;
+  height: 100%;
+  left: 0;
+  right: 0;
+  top: 0;
+  transform: translateX(-100%);
+  z-index: 1;
+}
+
+@keyframes skeletonAnimation {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
