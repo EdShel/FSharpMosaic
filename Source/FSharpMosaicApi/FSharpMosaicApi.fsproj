@@ -7,6 +7,12 @@
   <ItemGroup>
     <Compile Include="DataAccess\ImageFileRepository.fs" />
     <Compile Include="DataAccess\ImageHashRepository.fs" />
+    <Compile Include="Networking\SseHelper.fs" />
+    <Compile Include="ImageProcessors\UnpackedColor.fs" />
+    <Compile Include="ImageProcessors\ColorHelper.fs" />
+    <Compile Include="ImageProcessors\MosaicGenerator.fs" />
+    <Compile Include="ImageProcessors\ImagesZipFileImporter.fs" />
+    <Compile Include="Controllers\MosaicsControllerModels.fs" />
     <Compile Include="Controllers\MosaicsController.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

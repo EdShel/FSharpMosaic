@@ -5,11 +5,6 @@ if (!backendUrl) {
 }
 
 export const postCreateMosaic = async (formData: FormData) => {
-//   const formData = new FormData();
-//   formData.append("SourceImage", sourceImage);
-//   formData.append("ImagesX", String(imagesX));
-//   formData.append("ImagesY", String(imagesY));
-
   const response = await fetch(`${backendUrl}/api/v1/mosaics`, {
     method: "POST",
     body: formData,
@@ -27,3 +22,9 @@ async function ensureSuccessfulResponse(response: Response) {
     );
   }
 }
+
+export const createImportZipEventSource = (zipFilePath: string) => {
+  const query = new URLSearchParams();
+  query.append("ZipFilePath", zipFilePath);
+  return new EventSource(`${backendUrl}/api/v1/mosaics/import?${query}`);
+};

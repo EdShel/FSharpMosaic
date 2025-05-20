@@ -81,7 +81,7 @@
   display: none;
 }
 
-.density {
+.inputRow {
   margin-top: 1rem;
   display: flex;
   align-items: center;
@@ -89,7 +89,14 @@
   gap: 0.5rem;
 }
 
-.density > input {
+.inputRow > input {
+  border: 1px solid var(--text-color);
+  padding: 16 10px;
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+.inputRow > select {
   border: 1px solid var(--text-color);
   padding: 16 10px;
   border-radius: 4px;

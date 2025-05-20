@@ -11,6 +11,12 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...compat.config({
+    rules: {
+      // Mostly disabled for useEffect hooks: they must run once (i.e. with empty deps array), or twice in debug mode
+      "react-hooks/exhaustive-deps": "off",
+    },
+  }),
 ];
 
 export default eslintConfig;

@@ -3,13 +3,13 @@
 open Microsoft.Data.Sqlite
 
 module ImageHashRepository =
-    let private OpenConnection() =
+    let private openConnection() =
         let connection = new SqliteConnection("Data Source=images.db")
         connection.Open()
         connection
 
-    let CreateTableIfNotExists() =
-        use connection = OpenConnection()
+    let createTableIfNotExists() =
+        use connection = openConnection()
 
         let command = connection.CreateCommand()
         command.CommandText <- "
@@ -20,8 +20,8 @@ module ImageHashRepository =
         "
         command.ExecuteNonQuery()
 
-    let Insert(hash: int, fileName: string) =
-        use connection = OpenConnection()
+    let insert(hash: int, fileName: string) =
+        use connection = openConnection()
 
         let command = connection.CreateCommand()
         command.CommandText <- "
@@ -33,10 +33,10 @@ module ImageHashRepository =
 
         let createdRows = command.ExecuteNonQuery()
         if createdRows <> 1 then
-            raise(invalidOp("Didn't create the record"))
+            invalidOp("Didn't create the record")
 
-    let GetAllHashes() =
-        use connection = OpenConnection()
+    let getAllHashes() =
+        use connection = openConnection()
 
         let command = connection.CreateCommand()
         
@@ -52,8 +52,8 @@ module ImageHashRepository =
         ]
         result
 
-    let GetFileNames(ids: int array) =
-        use connection = OpenConnection()
+    let getFileNames(ids: int array) =
+        use connection = openConnection()
 
         let command = connection.CreateCommand()
         

@@ -10,7 +10,7 @@ module Program =
 
     [<EntryPoint>]
     let main args =
-        ImageHashRepository.CreateTableIfNotExists()
+        ImageHashRepository.createTableIfNotExists()
 
         let builder = WebApplication.CreateBuilder(args)
 

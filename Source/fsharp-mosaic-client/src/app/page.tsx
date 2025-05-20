@@ -21,25 +21,15 @@ export default function Home() {
   );
   const [formState, setFormState] = useState<FormStatus>({ status: "idle" });
 
-  // useEffect(() => {
-  //   const abortController = new AbortController();
-
-  //   return () => abortController.abort();
-  // }, []);
-
   return (
-    <div className={styles.container}>
+    <main className={styles.container}>
       <h1>Mosaic generator</h1>
 
       <form
-        onSubmit={async (data) => {
-          data.preventDefault();
+        onSubmit={async (ev) => {
+          ev.preventDefault();
 
-          const formData = new FormData(data.currentTarget);
-          console.log(
-            'formData.get("SourceImage")',
-            formData.get("SourceImage")
-          );
+          const formData = new FormData(ev.currentTarget);
           const uploadedImage = formData.get("SourceImage") as File | null;
           if (!uploadedImage || uploadedImage.size === 0) {
             setFormState({ status: "error", data: "Please upload an image" });
@@ -125,17 +115,33 @@ export default function Home() {
           </div>
         </div>
 
-        <div className={styles.density}>
+        <div className={styles.inputRow}>
           <label htmlFor="density">Density -</label>
           <input
+            id="density"
+            name="density"
             type="number"
             defaultValue={32}
-            name="Density"
-            id="density"
             min={4}
             max={256}
           />
           <span>pieces per largest image dimension</span>
+        </div>
+
+        <div className={styles.inputRow}>
+          <label htmlFor="resultImageSize">Image size -</label>
+          <select
+            id="resultImageSize"
+            name="resultImageSize"
+            defaultValue="512"
+          >
+            {[256, 512, 768, 1024, 2048, 4096].map((v) => (
+              <option key={v} value={v}>
+                {v} pixels
+              </option>
+            ))}
+          </select>
+          <span>(higher sizes take more time to be encoded)</span>
         </div>
 
         <div className={styles.buttonContainer}>
@@ -148,6 +154,6 @@ export default function Home() {
           <strong className={styles.error}>{formState.data}</strong>
         )}
       </form>
-    </div>
+    </main>
   );
 }
