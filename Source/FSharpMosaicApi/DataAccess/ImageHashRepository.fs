@@ -15,6 +15,7 @@ module ImageHashRepository =
         command.CommandText <- "
             CREATE TABLE IF NOT EXISTS ImageHash (
                 Id INTEGER PRIMARY KEY,
+                FileName TEXT NOT NULL,
                 Hash INTEGER NOT NULL
             )
         "

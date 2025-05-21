@@ -12,7 +12,8 @@ open SkiaSharp
 module ImagesZipFileImporter =
     let importZipFile(zipFilePath: string, response: HttpResponse, cancellationToken: CancellationToken) =
         async {
-            let raiseEvent = SseHelper.raiseEvent(response, cancellationToken)
+            let raiseEvent eventName data =
+                SseHelper.raiseEvent(response, cancellationToken) eventName data
 
             let processZipEntry (entry: ZipArchiveEntry, pngFileName: string) =
                 use entryStream = entry.Open()
@@ -55,4 +56,6 @@ module ImagesZipFileImporter =
                 if not(ImageFileRepository.exists(pngFileName)) then
                     let color = processZipEntry(entry, pngFileName)
                     do! raiseEvent "progress" {| Current = i; Total = entriesCount; Color = ColorHelper.toHexString(color) |}
+
+            do! raiseEvent "completed" {| Success = true |}
         }

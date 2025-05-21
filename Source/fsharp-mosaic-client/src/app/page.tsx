@@ -6,6 +6,7 @@ import styles from "./page.module.css";
 import { postCreateMosaic } from "@/lib/mosaicApi";
 import Skeleton from "@/ui/Skeleton";
 import CtaButton from "@/ui/CtaButton";
+import Link from "next/link";
 
 type FormStatus =
   | { status: "idle"; data?: undefined }
@@ -154,6 +155,10 @@ export default function Home() {
           <strong className={styles.error}>{formState.data}</strong>
         )}
       </form>
+
+      <Link href="/import-zip" className={styles.importLink}>
+        Import data (Demo)
+      </Link>
     </main>
   );
 }

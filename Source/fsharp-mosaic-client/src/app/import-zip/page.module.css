@@ -4,3 +4,24 @@
   max-width: 45rem;
   margin: 0 auto;
 }
+
+.input {
+  margin-top: 1rem;
+  border: 1px solid var(--text-color);
+  padding: 16 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  width: 100%;
+}
+
+.buttonWrapper {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.logs {
+  margin-top: 1.5rem;
+  display: grid;
+  gap: 0.5rem;
+}

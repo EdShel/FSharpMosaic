@@ -9,6 +9,7 @@
 :root {
   --accent-color: #ffe01b;
   --text-color: #241c15;
+  --error-color: #a72c09;
 }
 
 html,
