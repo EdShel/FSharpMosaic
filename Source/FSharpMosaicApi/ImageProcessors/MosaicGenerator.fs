@@ -8,7 +8,6 @@ open System
 module MosaicGenerator =
     let generateMosaicPng(bitmap: SKBitmap, density: int, resultImageSize: int) =
         let largestDimension = Math.Max(bitmap.Width, bitmap.Height)
-
         let chunkSize = largestDimension / density
         let imagesX = bitmap.Width / chunkSize
         let imagesY = bitmap.Height / chunkSize
@@ -57,6 +56,7 @@ module MosaicGenerator =
 
         let piecesFileNames = ImageHashRepository.getFileNames(chunkImagesIds)
 
+        // Group chunks by their image - this minimizes disk read operations if image repeats
         let repeatedImages =
             chunkImagesIds
             |> Array.indexed

@@ -11,8 +11,8 @@ module SseHelper =
     let raiseEvent (response: HttpResponse, cancellationToken: CancellationToken) (eventName: string) obj = 
         async {
             let data = toJson obj
-            let sse = $"event: {eventName}\ndata: {data}\n\n"
-            do! response.WriteAsync(sse, cancellationToken) |> Async.AwaitTask
+            let eventText = $"event: {eventName}\ndata: {data}\n\n"
+            do! response.WriteAsync(eventText, cancellationToken) |> Async.AwaitTask
         }
 
     let setEventStreamHeader (response: HttpResponse) =

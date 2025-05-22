@@ -9,8 +9,8 @@ import {
   SseEvent,
   ValidationEventData,
 } from "./types";
-import styles from "./page.module.css";
 import LogEventBlock from "./LogEventBlock";
+import styles from "./page.module.css";
 
 const MAX_VISIBLE_LOG_EVENTS = 10;
 
@@ -40,7 +40,7 @@ const Page: React.FC<object> = ({}) => {
       return;
     }
 
-    let logIdCounter = 1;
+    let logIdCounter = 0;
     const logEvent = (log: SseEvent) => {
       setLogEvents((old) =>
         [...old, { ...log, id: ++logIdCounter }].slice(-MAX_VISIBLE_LOG_EVENTS)
@@ -87,7 +87,7 @@ const Page: React.FC<object> = ({}) => {
             id="zipFilePath"
             name="ZipFilePath"
             type="text"
-            defaultValue="C:/Users/eduard.sheliemietiev/Desktop/archive.zip"
+            defaultValue=""
             required
           />
           <label htmlFor="zipFilePath" />

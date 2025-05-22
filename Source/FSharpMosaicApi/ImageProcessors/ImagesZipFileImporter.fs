@@ -27,6 +27,8 @@ module ImagesZipFileImporter =
                     [| 0..bitmapCroppedSize * bitmapCroppedSize - 1 |]
                     |> Array.map (fun i -> SKPointI(i % bitmap.Width, i / bitmap.Width) + padding)
 
+                // Re-encode image to have the same width & height:
+                // this saves on disk space and we won't need to crop it during mosaic generation
                 use croppedBitmap = new SKBitmap(
                     bitmapCroppedSize,
                     bitmapCroppedSize,

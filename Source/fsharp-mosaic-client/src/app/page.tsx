@@ -1,12 +1,13 @@
+/* Rationale for disabling the rule: Next.js image optimization capabilities aren't needed */
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
 import React, { useState } from "react";
-import styles from "./page.module.css";
+import Link from "next/link";
 import { postCreateMosaic } from "@/lib/mosaicApi";
 import Skeleton from "@/ui/Skeleton";
 import CtaButton from "@/ui/CtaButton";
-import Link from "next/link";
+import styles from "./page.module.css";
 
 type FormStatus =
   | { status: "idle"; data?: undefined }
@@ -22,36 +23,57 @@ export default function Home() {
   );
   const [formState, setFormState] = useState<FormStatus>({ status: "idle" });
 
+  const handleSourceImageUploaded: React.ChangeEventHandler<
+    HTMLInputElement
+  > = (ev) => {
+    if (sourceImagePreview) {
+      URL.revokeObjectURL(sourceImagePreview);
+      setSourceImagePreview(null);
+    }
+    if (mosaicImagePreview) {
+      URL.revokeObjectURL(mosaicImagePreview);
+      setMosaicImagePreview(null);
+    }
+
+    const files = ev.target.files;
+    if (!files || files.length < 1) {
+      return;
+    }
+    const file = files[0];
+    const filePreview = URL.createObjectURL(file);
+
+    setSourceImagePreview(filePreview);
+  };
+
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (ev) => {
+    ev.preventDefault();
+
+    const formData = new FormData(ev.currentTarget);
+    const uploadedImage = formData.get("SourceImage") as File | null;
+    if (!uploadedImage || uploadedImage.size === 0) {
+      setFormState({ status: "error", data: "Please upload an image" });
+      return;
+    }
+
+    setFormState({ status: "loading" });
+    try {
+      const blob = await postCreateMosaic(formData);
+      const preview = URL.createObjectURL(blob);
+      setMosaicImagePreview(preview);
+      setFormState({ status: "idle" });
+    } catch {
+      setFormState({
+        status: "error",
+        data: "Unexpected error during processing, try again later",
+      });
+    }
+  };
+
   return (
     <main className={styles.container}>
       <h1>Mosaic generator</h1>
 
-      <form
-        onSubmit={async (ev) => {
-          ev.preventDefault();
-
-          const formData = new FormData(ev.currentTarget);
-          const uploadedImage = formData.get("SourceImage") as File | null;
-          if (!uploadedImage || uploadedImage.size === 0) {
-            setFormState({ status: "error", data: "Please upload an image" });
-            return;
-          }
-
-          setFormState({ status: "loading" });
-          try {
-            const blob = await postCreateMosaic(formData);
-            const preview = URL.createObjectURL(blob);
-            setMosaicImagePreview(preview);
-            setFormState({ status: "idle" });
-          } catch {
-            setFormState({
-              status: "error",
-              data: "Unexpected error during processing, try again later",
-            });
-          }
-        }}
-        className={styles.form}
-      >
+      <form onSubmit={handleSubmit} className={styles.form}>
         <div className={styles.previews}>
           <label className={styles.preview}>
             {sourceImagePreview && (
@@ -70,25 +92,7 @@ export default function Home() {
               name="SourceImage"
               accept="image/png, image/jpeg"
               className={styles.fileInput}
-              onChange={(e) => {
-                if (sourceImagePreview) {
-                  URL.revokeObjectURL(sourceImagePreview);
-                  setSourceImagePreview(null);
-                }
-                if (mosaicImagePreview) {
-                  URL.revokeObjectURL(mosaicImagePreview);
-                  setMosaicImagePreview(null);
-                }
-
-                const files = e.target.files;
-                if (!files || files.length < 1) {
-                  return;
-                }
-                const file = files[0];
-                const filePreview = URL.createObjectURL(file);
-
-                setSourceImagePreview(filePreview);
-              }}
+              onChange={handleSourceImageUploaded}
             />
           </label>
           <div className={styles.preview}>
